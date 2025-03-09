@@ -6,6 +6,8 @@ __pycache__/
 # C extensions
 *.so
 
+all_tensors.pt
+
 # Distribution / packaging
 .Python
 build/
