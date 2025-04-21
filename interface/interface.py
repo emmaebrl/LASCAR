@@ -14,11 +14,15 @@ import plotly.express as px
 from matplotlib.colors import ListedColormap
 import matplotlib.patches as mpatches
 import segmentation_models_pytorch as smp
+import streamlit.components.v1 as components
 
 if "started" not in st.session_state:
     st.session_state.started = False
-st.title("LASCAR")
-st.write("Welcome to LASCAR (Land Analysis & Segmentation for Cover And Recognition)")
+st.markdown("<h1 style='text-align: center;'>LASCAR</h1>", unsafe_allow_html=True)
+st.markdown(
+    "<p style='text-align: center; font-style: italic;'>(Land Analysis & Segmentation for Cover And Recognition)</p>",
+    unsafe_allow_html=True,
+)
 st.markdown(
     """
     <style>
@@ -81,6 +85,8 @@ st.markdown(
 )
 
 CLASSES_COLORPALETTE = {
+    "no_data": "#ffffff",
+    "clouds": "#cccccc",
     "cultivated": "#e41a1c",
     "herbaceous": "#377eb8",
     "broadleaf": "#4daf4a",
@@ -89,25 +95,24 @@ CLASSES_COLORPALETTE = {
     "water": "#a65628",
     "natural": "#f781bf",
     "snow": "#999999",
-    "no_data": "#ffffff",
-    "clouds": "#cccccc",  # ← ajoute cette ligne !
 }
 
 CLASS_NAMES = CLASSES_COLORPALETTE.keys()
 
-
 tab1, tab2, tab3 = st.tabs(
     [
-        "Modèle à proportion directe",
-        "Modèle simple prédiction pixel",
-        "Modèle existant",
+        "Régression des proportions",
+        "Segmentation pixel-wise",
+        "Finetuning U-Net",
     ]
 )
 
 
 ########### FONCTIONS DE CHARGEMENT DES MODÈLES ###########
 @st.cache_resource
-def load_proportion_model(path=r"C:\Users\PC\Desktop\Projet_M2\Clean Project Deep Learning\model_proportion.pth"):
+def load_proportion_model(
+    path=r"models\model_proportion_final.pth",
+):
     model = SimpleCNN(num_classes=10)
     model.load_state_dict(torch.load(path, map_location="cpu"))
     model.eval()
@@ -115,7 +120,9 @@ def load_proportion_model(path=r"C:\Users\PC\Desktop\Projet_M2\Clean Project Dee
 
 
 @st.cache_resource
-def load_segmentation_model(path=r"C:\Users\PC\Desktop\Projet_M2\Clean Project Deep Learning\model2_segmentationcomplexified.pth"):
+def load_segmentation_model(
+    path=r"models\model2_segmentation_final.pth",
+):
     model = SimpleSegNet(in_channels=4, num_classes=10)
     model.load_state_dict(torch.load(path, map_location="cpu"))
     model.eval()
@@ -293,7 +300,20 @@ def plot_proportions_vs_truth(pred: list[float], true: list[float], title: str):
 
 # ========== PAGE PRINCIPALE ==========
 with tab1:
-    st.header("Modèle à proportion directe")
+    st.header("Modèle 1: Prédiction des proportions")
+
+    # 💡 Intégration du schéma Draw.io (SVG)
+    with open("graphs/simplecnn.svg", "r", encoding="utf-8") as f:
+        svg_code = f.read()
+    components.html(
+        f"""
+    <div style="zoom: 0.8; transform: scale(0.8); transform-origin: top left;">
+        {svg_code}
+    </div>
+    """,
+        height=350,
+        scrolling=False,
+    )
 
     split = st.radio(
         "Choisissez le jeu de données :", ["test", "validation"], key="split1"
@@ -352,7 +372,7 @@ with tab1:
 
 
 with tab2:
-    st.header("Modèle simple prédiction pixel")
+    st.header("Modèle 2: Segmentation pixel-wise")
 
     split = st.radio(
         "Choisissez le jeu de données :", ["test", "validation"], key="split2"
@@ -416,7 +436,9 @@ with tab2:
                 # Chargement du masque réel si en validation
                 true_mask = None
                 if split == "validation":
-                    gt_mask_path = os.path.join("dataset", "train", "masks", f"{selected_id}.tif")
+                    gt_mask_path = os.path.join(
+                        "dataset", "train", "masks", f"{selected_id}.tif"
+                    )
                     if os.path.exists(gt_mask_path):
                         with TiffFile(gt_mask_path) as tif:
                             true_mask = tif.asarray()
@@ -425,11 +447,15 @@ with tab2:
                 comparison_mask = None
                 if true_mask is not None and pred_mask.shape == true_mask.shape:
                     comparison_mask = np.zeros((*true_mask.shape, 3), dtype=np.uint8)
-                    comparison_mask[(pred_mask == true_mask)] = [0, 255, 0]   # vert
-                    comparison_mask[(pred_mask != true_mask)] = [255, 0, 0]   # rouge
+                    comparison_mask[(pred_mask == true_mask)] = [0, 255, 0]  # vert
+                    comparison_mask[(pred_mask != true_mask)] = [255, 0, 0]  # rouge
 
                 # Affichage dynamique : RGB / prédiction / vrai masque / comparaison
-                n_cols = 4 if comparison_mask is not None else 3 if true_mask is not None else 2
+                n_cols = (
+                    4
+                    if comparison_mask is not None
+                    else 3 if true_mask is not None else 2
+                )
                 fig_mask, axs = plt.subplots(1, n_cols, figsize=(6 * n_cols, 6))
 
                 axs[0].imshow(rgb)
@@ -441,7 +467,9 @@ with tab2:
                 axs[1].axis("off")
 
                 if true_mask is not None:
-                    axs[2].imshow(true_mask, cmap=cmap, vmin=0, vmax=len(CLASS_NAMES) - 1)
+                    axs[2].imshow(
+                        true_mask, cmap=cmap, vmin=0, vmax=len(CLASS_NAMES) - 1
+                    )
                     axs[2].set_title("Masque réel")
                     axs[2].axis("off")
 
@@ -464,8 +492,6 @@ with tab2:
                 )
 
                 st.pyplot(fig_mask)
-
-
 
     except Exception as e:
         st.error(f"Erreur lors du traitement de l'image {selected_id}: {e}")

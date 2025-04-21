@@ -3,20 +3,21 @@ import torch
 
 
 class SimpleCNN(nn.Module):
-    def __init__(self, num_classes=10):
+    def __init__(self, num_classes):
         super().__init__()
         self.encoder = nn.Sequential(
-            nn.Conv2d(4, 16, 3, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(2),
-            nn.Conv2d(16, 32, 3, padding=1),
+            nn.Conv2d(4, 32, 3, padding=1),
             nn.ReLU(),
             nn.MaxPool2d(2),
             nn.Conv2d(32, 64, 3, padding=1),
             nn.ReLU(),
+            nn.MaxPool2d(2),
+            nn.Conv2d(64, 128, 3, padding=1),
+            nn.ReLU(),
             nn.AdaptiveAvgPool2d(1),
+            nn.Dropout(0.3),
         )
-        self.fc = nn.Linear(64, num_classes)
+        self.fc = nn.Linear(128, num_classes)
 
     def forward(self, x):
         x = self.encoder(x)
