@@ -98,16 +98,16 @@ CLASS_NAMES = CLASSES_COLORPALETTE.keys()
 
 tab1, tab2, tab3 = st.tabs(
     [
-        "🔢 Modèle à proportion directe",
-        "🧠 Modèle simple prédiction pixel",
-        "📦 Modèle existant",
+        "Modèle à proportion directe",
+        "Modèle simple prédiction pixel",
+        "Modèle existant",
     ]
 )
 
 
 ########### FONCTIONS DE CHARGEMENT DES MODÈLES ###########
 @st.cache_resource
-def load_proportion_model(path="models\model_proportion.pth"):
+def load_proportion_model(path=r"C:\Users\PC\Desktop\Projet_M2\Clean Project Deep Learning\model_proportion.pth"):
     model = SimpleCNN(num_classes=10)
     model.load_state_dict(torch.load(path, map_location="cpu"))
     model.eval()
@@ -115,7 +115,7 @@ def load_proportion_model(path="models\model_proportion.pth"):
 
 
 @st.cache_resource
-def load_segmentation_model(path="models\model2_segmentationcomplexified.pth"):
+def load_segmentation_model(path=r"C:\Users\PC\Desktop\Projet_M2\Clean Project Deep Learning\model2_segmentationcomplexified.pth"):
     model = SimpleSegNet(in_channels=4, num_classes=10)
     model.load_state_dict(torch.load(path, map_location="cpu"))
     model.eval()
@@ -408,17 +408,49 @@ with tab2:
                     )
 
                 # Affichage du masque
+                # Affichage du masque
                 cmap = ListedColormap(
                     [CLASSES_COLORPALETTE[cls] for cls in CLASS_NAMES]
                 )
-                fig_mask, axs = plt.subplots(1, 2, figsize=(12, 6))
+
+                # Chargement du masque réel si en validation
+                true_mask = None
+                if split == "validation":
+                    gt_mask_path = os.path.join("dataset", "train", "masks", f"{selected_id}.tif")
+                    if os.path.exists(gt_mask_path):
+                        with TiffFile(gt_mask_path) as tif:
+                            true_mask = tif.asarray()
+
+                # Image de comparaison verte/rouge
+                comparison_mask = None
+                if true_mask is not None and pred_mask.shape == true_mask.shape:
+                    comparison_mask = np.zeros((*true_mask.shape, 3), dtype=np.uint8)
+                    comparison_mask[(pred_mask == true_mask)] = [0, 255, 0]   # vert
+                    comparison_mask[(pred_mask != true_mask)] = [255, 0, 0]   # rouge
+
+                # Affichage dynamique : RGB / prédiction / vrai masque / comparaison
+                n_cols = 4 if comparison_mask is not None else 3 if true_mask is not None else 2
+                fig_mask, axs = plt.subplots(1, n_cols, figsize=(6 * n_cols, 6))
+
                 axs[0].imshow(rgb)
                 axs[0].set_title("Image RGB")
                 axs[0].axis("off")
+
                 axs[1].imshow(pred_mask, cmap=cmap, vmin=0, vmax=len(CLASS_NAMES) - 1)
                 axs[1].set_title("Masque prédit")
                 axs[1].axis("off")
 
+                if true_mask is not None:
+                    axs[2].imshow(true_mask, cmap=cmap, vmin=0, vmax=len(CLASS_NAMES) - 1)
+                    axs[2].set_title("Masque réel")
+                    axs[2].axis("off")
+
+                if comparison_mask is not None:
+                    axs[3].imshow(comparison_mask)
+                    axs[3].set_title("Comparaison (vert = OK)")
+                    axs[3].axis("off")
+
+                # Légende des classes sur le masque prédit
                 handles = [
                     mpatches.Patch(color=CLASSES_COLORPALETTE[cls], label=cls)
                     for cls in CLASS_NAMES
@@ -432,6 +464,8 @@ with tab2:
                 )
 
                 st.pyplot(fig_mask)
+
+
 
     except Exception as e:
         st.error(f"Erreur lors du traitement de l'image {selected_id}: {e}")
