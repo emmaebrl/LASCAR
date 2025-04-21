@@ -11,7 +11,11 @@ import albumentations as A
 from albumentations.pytorch import ToTensorV2
 from models import SimpleCNN, SimpleSegNet
 import plotly.express as px
+from matplotlib.colors import ListedColormap
+import matplotlib.patches as mpatches
 
+if "started" not in st.session_state:
+    st.session_state.started = False
 
 st.title("LASCAR")
 st.write("Welcome to LASCAR (Land Analysis & Segmentation for Cover And Recognition)")
@@ -87,7 +91,9 @@ CLASSES_COLORPALETTE = {
     "natural": "#f781bf",
     "snow": "#999999",
     "no_data": "#ffffff",
+    "clouds": "#cccccc",  # ← ajoute cette ligne !
 }
+
 
 
 class_names = [
@@ -104,92 +110,194 @@ class_names = [
 ]
 
 
-test_img_dir = "data/test/images"
-test_ids = [
-    f.replace(".tif", "") for f in os.listdir(test_img_dir) if f.endswith(".tif")
-]
+tab1, tab2, tab3 = st.tabs([
+    "🔢 Modèle à proportion directe",
+    "🧠 Modèle simple prédiction pixel",
+    "📦 Modèle existant",
+])
 
-
-st.subheader("Choisissez un modèle à utiliser :")
-
-model_choice = st.radio(
-    "Quel type de modèle souhaitez-vous utiliser ?",
-    [
-        " Modèle à proportion directe",
-        " Modèle simple prédiction pixel",
-        " Modèle existant )",
-    ],
-    index=1,
-)
-
-st.write(f" Modèle sélectionné : {model_choice}")
-
-
-class SimpleCNN(nn.Module):
-    def __init__(self, num_classes=10):
-        super().__init__()
-        self.encoder = nn.Sequential(
-            nn.Conv2d(4, 16, 3, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(2),
-            nn.Conv2d(16, 32, 3, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(2),
-            nn.Conv2d(32, 64, 3, padding=1),
-            nn.ReLU(),
-            nn.AdaptiveAvgPool2d(1),
-        )
-        self.fc = nn.Linear(64, num_classes)
-
-    def forward(self, x):
-        x = self.encoder(x)
-        x = x.view(x.size(0), -1)
-        return torch.log_softmax(self.fc(x), dim=1)
-
-
-@st.cache_resource
-def load_proportion_model(path="models/model_proportion.pth"):
+def load_proportion_model(path="model_proportion.pth"):
     model = SimpleCNN(num_classes=10)
     model.load_state_dict(torch.load(path, map_location="cpu"))
     model.eval()
     return model
 
-
 @st.cache_resource
-def load_segmentation_model(path="models/model2_segmentationcomplexified.pth"):
+def load_segmentation_model(path="model2_segmentationcomplexified.pth"):
     model = SimpleSegNet(in_channels=4, num_classes=10)
     model.load_state_dict(torch.load(path, map_location="cpu"))
     model.eval()
     return model
 
 
-selected_id = st.selectbox("Sélectionnez une image de test à prédire :", test_ids)
-image_path = os.path.join(test_img_dir, f"{selected_id}.tif")
+def get_image_ids(split: str, base_dir: str = "../dataset") -> tuple[list, str]:
+    img_dir = os.path.join(base_dir, split, "images")
+    image_ids = [f.replace(".tif", "") for f in os.listdir(img_dir) if f.endswith(".tif")]
+    return image_ids, img_dir
 
-
-try:
+def load_tiff_image(image_path: str) -> np.ndarray:
     with TiffFile(image_path) as tif:
-        image_arr = tif.asarray()
+        return tif.asarray()
 
-    image_display = np.clip(image_arr, 0, 2200)
-    image_display = (image_display - 0) / (2200 - 0)
+def convert_to_rgb(img: np.ndarray) -> np.ndarray:
+    return np.stack([
+        normalize_band(img[:, :, 2]),
+        normalize_band(img[:, :, 1]),
+        normalize_band(img[:, :, 0]),
+    ], axis=-1)
 
-    fig, ax = plt.subplots(figsize=(5, 5))
-    ax.imshow(image_display)
+def display_rgb_image(rgb: np.ndarray, title: str = "Image RGB"):
+    fig, ax = plt.subplots(figsize=(4, 4))
+    ax.imshow(rgb)
     ax.axis("off")
-
+    st.markdown(f"**{title}**")
     st.pyplot(fig)
 
-    if st.button("Prédire sur cette image"):
-        if model_choice.strip() == "Modèle à proportion directe":
-            model = load_proportion_model()
+def plot_proportions(proportions: list[float], title: str) -> None:
+    df_plot = pd.DataFrame({
+        "Classe": [name.capitalize() for name in class_names],
+        "Proportion": [round(p, 3) for p in proportions],
+    })
+    fig = px.bar(
+        df_plot,
+        x="Classe",
+        y="Proportion",
+        text="Proportion",
+        range_y=[0, 1],
+        color="Classe",
+        color_discrete_sequence=px.colors.qualitative.Set3,
+        title=title,
+    )
+    fig.update_traces(texttemplate="%{text:.3f}", textposition="outside")
+    fig.update_layout(
+        plot_bgcolor="#0E1117",
+        paper_bgcolor="#0E1117",
+        font=dict(color="white", size=16),
+        title=dict(
+            text=title,
+            x=0.5,
+            xanchor="center",
+            font=dict(color="white", size=24),
+        ),
+        xaxis_tickangle=-45,
+        margin=dict(l=20, r=20, t=80, b=60),
+        height=400,
+        showlegend=False,
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
+
+
+def normalize_band(band, low=2, high=98):
+    p_low, p_high = np.percentile(band, (low, high))
+    band = np.clip(band, p_low, p_high)
+    return (band - p_low) / (p_high - p_low + 1e-8)
+import json
+
+@st.cache_data
+def load_split_ids(path="splits/train_val_ids.json"):
+    with open(path, "r") as f:
+        return json.load(f)
+
+split_ids_dict = load_split_ids()
+
+def get_image_ids_custom(split: str, base_dir: str = "../dataset") -> tuple[list, str]:
+    if split == "validation":
+        img_dir = os.path.join(base_dir, "train", "images")  # <- ici on pointe vers train/images
+        val_ids = split_ids_dict.get("val", [])
+        image_ids = [img_id for img_id in val_ids if os.path.isfile(os.path.join(img_dir, f"{img_id}.tif"))]
+    else:
+        img_dir = os.path.join(base_dir, split, "images")
+        image_ids = [f.replace(".tif", "") for f in os.listdir(img_dir) if f.endswith(".tif")]
+    return image_ids, img_dir
+
+@st.cache_data
+def load_validation_labels(path="../data/train_labels_GY1QjFw.csv"):
+    df = pd.read_csv(path)
+    df["sample_id"] = df["sample_id"].astype(str)  # Convertir en str pour correspondre aux IDs
+    df.set_index("sample_id", inplace=True)
+
+    # 🔧 Réordonner les colonnes selon l’ordre de class_names (sécurisé)
+    df = df[[col for col in class_names if col in df.columns]]
+
+    return df
+
+
+labels_df = load_validation_labels()
+
+def plot_proportions_vs_truth(predicted: list[float], true: list[float], title: str):
+    st.text(f"🔍 Taille prédite : {len(predicted)}")
+    st.text(f"🔍 Taille réelle : {len(true)}")
+    st.text(f"Prédite : {predicted}")
+    st.text(f"Réelle : {true}")
+
+    # Pour être sûr d’avoir 10 valeurs
+    predicted = (predicted + [0] * 10)[:10]
+    true = (true + [0] * 10)[:10]
+
+    df_plot = pd.DataFrame({
+        "Classe": class_names * 2,
+        "Proportion": predicted + true,
+        "Type": ["Prédite"] * 10 + ["Réelle"] * 10,
+    })
+
+    fig = px.bar(
+        df_plot,
+        x="Classe",
+        y="Proportion",
+        color="Type",
+        barmode="group",
+        text="Proportion",
+        color_discrete_map={"Prédite": "#1f77b4", "Réelle": "#ff7f0e"},
+        title=title
+    )
+
+    fig.update_traces(texttemplate="%{text:.3f}", textposition="outside")
+    fig.update_layout(
+        plot_bgcolor="#0E1117",
+        paper_bgcolor="#0E1117",
+        font=dict(color="white", size=16),
+        title=dict(
+            text=title,
+            x=0.5,
+            xanchor="center",
+            font=dict(color="white", size=24),
+        ),
+        xaxis_tickangle=-45,
+        margin=dict(l=20, r=20, t=80, b=60),
+        height=450,
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+
+
+
+
+
+with tab1:
+    st.header("Modèle à proportion directe")
+
+    split = st.radio("Choisissez le jeu de données :", ["test", "validation"], key="split1")
+    image_ids, img_dir = get_image_ids_custom(split)
+    selected_id = st.selectbox("Sélectionnez une image à afficher :", image_ids, key="select_proportion")
+
+    image_path = os.path.join(img_dir, f"{selected_id}.tif")
+
+    try:
+        img = load_tiff_image(image_path)
+        rgb = convert_to_rgb(img)
+        display_rgb_image(rgb, f"Image RGB : `{selected_id}`")
+
+        if st.button("Prédire", key="predict_proportion"):
+            st.subheader("Prédiction des proportions...")
+
+            model = load_proportion_model()
             transform = A.Compose([A.Resize(256, 256), A.Normalize(), ToTensorV2()])
 
-            if image_arr.shape[2] < 4:
-                st.warning("L’image ne contient pas 4 canaux.")
+            if img.shape[2] < 4:
+                st.error("L’image ne contient pas les 4 canaux requis.")
             else:
-                image_input = image_arr[:, :, :4].astype(np.float32)
+                image_input = img[:, :, :4].astype(np.float32)
                 transformed = transform(image=image_input)
                 input_tensor = transformed["image"].unsqueeze(0)
 
@@ -197,153 +305,79 @@ try:
                     output = model(input_tensor)
                     proportions = torch.exp(output.squeeze()).numpy()
 
-                    # Affichage Plotly amélioré
-                    st.subheader("Proportions prédites (graphiques)")
+                if split == "validation" and selected_id in labels_df.index:
+                    true_props = np.array(labels_df.loc[selected_id, class_names].tolist(), dtype=np.float32).tolist()
 
-                    # Format proportions à 3 décimales max
-                    proportions_rounded = [round(p, 3) for p in proportions]
+                    if any([v is None or np.isnan(v) for v in proportions]):
+                        st.error("❌ Valeurs `NaN` détectées dans les prédictions.")
+                    elif any([v is None or np.isnan(v) for v in true_props]):
+                        st.error("❌ Valeurs `NaN` détectées dans les valeurs réelles.")
+                    else:
+                        plot_proportions_vs_truth(proportions, true_props, "Comparaison Prédite vs Réelle")
 
-                    df_plot = pd.DataFrame(
-                        {
-                            "Classe": [name.capitalize() for name in class_names],
-                            "Proportion": proportions_rounded,
-                        }
-                    )
+                else:
+                    plot_proportions(proportions, "Distribution des classes dans l'image prédite")
 
-                    fig = px.bar(
-                        df_plot,
-                        x="Classe",
-                        y="Proportion",
-                        text="Proportion",
-                        range_y=[0, 1],
-                        color="Classe",
-                        color_discrete_sequence=px.colors.qualitative.Set3,
-                        title="Distribution des classes dans l'image prédite",
-                    )
 
-                    fig.update_traces(
-                        texttemplate="%{text:.3f}", textposition="outside"
-                    )
+    except Exception as e:
+        st.warning(f"Erreur lors du chargement de l'image {selected_id}: {e}")
 
-                    fig.update_layout(
-                        plot_bgcolor="#0E1117",
-                        paper_bgcolor="#0E1117",
-                        font=dict(color="white", size=16),
-                        title={
-                            "text": "Distribution des classes dans l'image prédite",
-                            "x": 0.5,
-                            "xanchor": "center",
-                            "font": dict(color="white", size=24),
-                        },
-                        xaxis_tickangle=-45,
-                        margin=dict(l=20, r=20, t=80, b=60),
-                        height=400,
-                        width=200,  # ⬅️ Plus grand en hauteur
-                        showlegend=False,
-                        uniformtext_minsize=8,
-                        uniformtext_mode="hide",
-                    )
 
-                    st.plotly_chart(fig, use_container_width=True)
+with tab2:
+    st.header("Modèle simple prédiction pixel")
 
-        if model_choice.strip() == "Modèle simple prédiction pixel":
+    split = st.radio("Choisissez le jeu de données :", ["test", "validation"], key="split2")
+    image_ids, img_dir = get_image_ids_custom(split)
+    selected_id = st.selectbox("Sélectionnez une image à afficher :", image_ids, key="select_segnet")
+
+    image_path = os.path.join(img_dir, f"{selected_id}.tif")
+
+    try:
+        img = load_tiff_image(image_path)
+        rgb = convert_to_rgb(img)
+        display_rgb_image(rgb, f"Image RGB : `{selected_id}`")
+
+        if st.button("Prédire (SegNet)", key="predict_segnet"):
+            st.subheader("Prédiction du masque...")
+
             model = load_segmentation_model()
-
             transform = A.Compose([A.Resize(256, 256), A.Normalize(), ToTensorV2()])
 
-            if image_arr.shape[2] < 4:
-                st.warning("L’image ne contient pas 4 canaux.")
+            if img.shape[2] < 4:
+                st.error("L’image ne contient pas les 4 canaux requis.")
             else:
-                image_input = image_arr[:, :, :4].astype(np.float32)
+                image_input = img[:, :, :4].astype(np.float32)
                 transformed = transform(image=image_input)
                 input_tensor = transformed["image"].unsqueeze(0)
 
                 with torch.no_grad():
-                    pred_mask_logits = model(input_tensor)
-                    pred_mask = (
-                        torch.argmax(pred_mask_logits.squeeze(0), dim=0).cpu().numpy()
-                    )
+                    logits = model(input_tensor)
+                    pred_mask = torch.argmax(logits.squeeze(0), dim=0).cpu().numpy()
 
-                # ➕ Calcul des proportions
+                # Proportions
                 unique, counts = np.unique(pred_mask, return_counts=True)
                 total = pred_mask.size
                 proportions = np.zeros(len(class_names))
                 for u, c in zip(unique, counts):
-                    if u < len(class_names):  # éviter débordement
+                    if u < len(class_names):
                         proportions[u] = c / total
 
-                # ➕ Affichage du graphe
-                st.subheader("Proportions prédites (graphiques)")
-                proportions_rounded = [round(p, 3) for p in proportions]
-                df_plot = pd.DataFrame(
-                    {
-                        "Classe": [name.capitalize() for name in class_names],
-                        "Proportion": proportions_rounded,
-                    }
-                )
+                if split == "validation" and selected_id in labels_df.index:
+                    true_props = np.array(labels_df.loc[selected_id, class_names].tolist(), dtype=np.float32).tolist()
+                    plot_proportions_vs_truth(proportions, true_props, "Comparaison Prédite vs Réelle")
+                else:
+                    plot_proportions(proportions, "Distribution des classes dans l'image prédite")
 
-                fig = px.bar(
-                    df_plot,
-                    x="Classe",
-                    y="Proportion",
-                    text="Proportion",
-                    range_y=[0, 1],
-                    color="Classe",
-                    color_discrete_sequence=px.colors.qualitative.Set3,
-                    title="Distribution des classes dans l'image prédite (SegNet)",
-                )
-
-                fig.update_traces(texttemplate="%{text:.3f}", textposition="outside")
-                fig.update_layout(
-                    plot_bgcolor="#0E1117",
-                    paper_bgcolor="#0E1117",
-                    font=dict(color="white", size=16),
-                    title={
-                        "text": "Distribution des classes dans l'image prédite (SegNet)",
-                        "x": 0.5,
-                        "xanchor": "center",
-                        "font": dict(color="white", size=24),
-                    },
-                    xaxis_tickangle=-45,
-                    margin=dict(l=20, r=20, t=80, b=60),
-                    height=400,
-                    showlegend=False,
-                )
-
-                st.plotly_chart(fig, use_container_width=True)
-
-                # ➕ Affichage image + masque
-                from matplotlib.colors import ListedColormap
-                import matplotlib.patches as mpatches
-
-                def normalize_band(band, low=2, high=98):
-                    p_low, p_high = np.percentile(band, (low, high))
-                    band = np.clip(band, p_low, p_high)
-                    return (band - p_low) / (p_high - p_low + 1e-8)
-
-                rgb = np.stack(
-                    [
-                        normalize_band(image_arr[:, :, 2]),
-                        normalize_band(image_arr[:, :, 1]),
-                        normalize_band(image_arr[:, :, 0]),
-                    ],
-                    axis=-1,
-                )
-
-                cmap_colors = [CLASSES_COLORPALETTE[cls] for cls in class_names]
-                cmap = ListedColormap(cmap_colors)
-
-                fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+                # Affichage du masque
+                cmap = ListedColormap([CLASSES_COLORPALETTE[cls] for cls in class_names])
+                fig_mask, axs = plt.subplots(1, 2, figsize=(12, 6))
                 axs[0].imshow(rgb)
                 axs[0].set_title("Image RGB")
                 axs[0].axis("off")
-                im = axs[1].imshow(
-                    pred_mask, cmap=cmap, vmin=0, vmax=len(class_names) - 1
-                )
-                axs[1].set_title("Mask prédit")
+                axs[1].imshow(pred_mask, cmap=cmap, vmin=0, vmax=len(class_names) - 1)
+                axs[1].set_title("Masque prédit")
                 axs[1].axis("off")
 
-                # ➕ Légende
                 handles = [
                     mpatches.Patch(color=CLASSES_COLORPALETTE[cls], label=cls)
                     for cls in class_names
@@ -352,13 +386,16 @@ try:
                     handles=handles,
                     bbox_to_anchor=(1.05, 1),
                     loc="upper left",
-                    borderaxespad=0.0,
                     fontsize=9,
-                    title="Classes",
+                    title="Classes"
                 )
 
-                st.pyplot(fig)
+                st.pyplot(fig_mask)
+
+    except Exception as e:
+        st.error(f"Erreur lors du traitement de l'image {selected_id}: {e}")
 
 
-except Exception as e:
-    st.error(f"Impossible de charger l'image {selected_id}: {e}")
+with tab3:
+    st.header("Modèle existant (?)")
+    st.info("Fonctionnalité à définir selon le modèle que vous voulez intégrer.")
