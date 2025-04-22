@@ -18,13 +18,13 @@ import streamlit.components.v1 as components
 
 if "started" not in st.session_state:
     st.session_state.started = False
-st.markdown("<h1 style='text-align: center;'>LASCAR</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center;'>LASCAR 🌍</h1>", unsafe_allow_html=True)
 st.markdown(
     "<p style='text-align: center; font-style: italic;'>(Land Analysis & Segmentation for Cover And Recognition)</p>",
     unsafe_allow_html=True,
 )
 st.markdown(
-    "<p style='text-align: left; font-size: 18px;'>🌍 Une plateforme de vision par ordinateur pour explorer la couverture terrestre en un clin d'œil.</p>",
+    "<p style='text-align: center; font-size: 18px;'>A computer vision platform to explore land cover at a glance.</p>",
     unsafe_allow_html=True,
 )
 
@@ -67,7 +67,30 @@ st.markdown(
 """,
     unsafe_allow_html=True,
 )
+st.markdown(
+    """
+    <style>
+    /* Centre les onglets */
+    .stTabs [data-baseweb="tab-list"] {
+        justify-content: center;
+    }
 
+    /* Agrandit les onglets pour qu'ils remplissent plus l'espace */
+    .stTabs [data-baseweb="tab"] {
+        min-width: 200px;
+        flex-grow: 1;
+        justify-content: center;
+        text-align: center;
+    }
+
+    /* Ajuste l’indicateur actif */
+    .stTabs [aria-selected="true"] {
+        border-bottom: 3px solid #FF4B4B;  /* Rouge clair personnalisable */
+    }
+    </style>
+""",
+    unsafe_allow_html=True,
+)
 # Forcer le style du bouton
 st.markdown(
     """
@@ -117,11 +140,25 @@ CLASSES_NAMES_PROP = [
     "snow",
 ]
 
+CLASSES_NAMES_UNET = [
+    "cultivated",
+    "herbaceous",
+    "broadleaf",
+    "coniferous",
+    "artificial",
+    "water",
+    "natural",
+    "snow",
+    "no_data",
+    "clouds",
+]
+
+
 tab1, tab2, tab3 = st.tabs(
     [
-        "Régression des proportions",
-        "Segmentation pixel-wise",
-        "Finetuning U-Net",
+        "Proportion Regression",
+        "Pixel-wise Segmentation",
+        "U-Net Finetuning",
     ]
 )
 
@@ -223,8 +260,8 @@ def convert_to_rgb(img: np.ndarray) -> np.ndarray:
     )
 
 
-def display_rgb_image(rgb: np.ndarray, title: str = "Image RGB"):
-    fig, ax = plt.subplots(figsize=(4, 4))
+def display_rgb_image(rgb: np.ndarray, title: str = "RBG Image"):
+    fig, ax = plt.subplots(figsize=(3, 3))
     ax.imshow(rgb)
     ax.axis("off")
     st.markdown(f"**{title}**")
@@ -325,7 +362,7 @@ def plot_proportions_vs_truth(
 
 # ========== PAGE PRINCIPALE ==========
 with tab1:
-    st.header("Modèle 1: Prédiction des proportions")
+    st.header("Model 1: Proportion Prediction")
 
     # 💡 Intégration du schéma Draw.io (SVG)
     with open("graphs/simplecnn.svg", "r", encoding="utf-8") as f:
@@ -340,12 +377,11 @@ with tab1:
         scrolling=False,
     )
 
-    split = st.radio(
-        "Choisissez le jeu de données :", ["test", "validation"], key="split1"
-    )
+    split = st.radio("Choose dataset:", ["test", "validation"], key="split1")
+
     image_ids, img_dir, validation_masks, labels_df = get_data(split)
     selected_id = st.selectbox(
-        "Sélectionnez une image à afficher :", image_ids, key="select_proportion"
+        "Select an image to display:", image_ids, key="select_proportion"
     )
 
     image_path = os.path.join(img_dir, f"{selected_id}.tif")
@@ -353,16 +389,16 @@ with tab1:
     try:
         img = load_tiff_image(image_path)
         rgb = convert_to_rgb(img)
-        display_rgb_image(rgb, f"Image RGB : `{selected_id}`")
+        display_rgb_image(rgb, f"RGB Image: `{selected_id}`")
 
-        if st.button("Prédire", key="predict_proportion"):
-            st.subheader("Prédiction des proportions...")
+        if st.button("Predict", key="predict_proportion"):
+            st.subheader("Predicting class proportions...")
 
             model = load_proportion_model()
             transform = A.Compose([A.Resize(256, 256), A.Normalize(), ToTensorV2()])
 
             if img.shape[2] < 4:
-                st.error("L’image ne contient pas les 4 canaux requis.")
+                st.error("The image does not contain the required 4 channels.")
             else:
                 image_input = img[:, :, :4].astype(np.float32)
                 transformed = transform(image=image_input)
@@ -379,37 +415,36 @@ with tab1:
                     )
 
                     if any([v is None or np.isnan(v) for v in proportions]):
-                        st.error("❌ Valeurs `NaN` détectées dans les prédictions.")
+                        st.error("❌ `NaN` values detected in predictions.")
                     elif any([v is None or np.isnan(v) for v in true_props]):
-                        st.error("❌ Valeurs `NaN` détectées dans les valeurs réelles.")
+                        st.error("❌ `NaN` values detected in ground truth.")
                     else:
                         plot_proportions_vs_truth(
                             proportions,
                             true_props,
-                            "Comparaison Prédite vs Réelle",
+                            "Predicted vs Ground Truth Comparison",
                             CLASSES_NAMES_PROP,
                         )
 
                 else:
                     plot_proportions(
                         proportions,
-                        "Distribution des classes dans l'image prédite",
+                        "Predicted class distribution in the image",
                         CLASSES_NAMES_SEG,
                     )
 
     except Exception as e:
-        st.warning(f"Erreur lors du chargement de l'image {selected_id}: {e}")
+        st.warning(f"Error while loading image {selected_id}: {e}")
 
 
 with tab2:
-    st.header("Modèle 2: Segmentation pixel-wise")
+    st.header("Model 2: Pixel-wise Segmentation")
 
-    split = st.radio(
-        "Choisissez le jeu de données :", ["test", "validation"], key="split2"
-    )
+    split = st.radio("Choose dataset:", ["test", "validation"], key="split2")
+
     image_ids, img_dir, validation_masks, labels_df = get_data(split)
     selected_id = st.selectbox(
-        "Sélectionnez une image à afficher :", image_ids, key="select_segnet"
+        "Select an image to display:", image_ids, key="select_segnet"
     )
 
     image_path = os.path.join(img_dir, f"{selected_id}.tif")
@@ -417,16 +452,17 @@ with tab2:
     try:
         img = load_tiff_image(image_path)
         rgb = convert_to_rgb(img)
-        display_rgb_image(rgb, f"Image RGB : `{selected_id}`")
+        display_rgb_image(rgb, f"RGB Image: `{selected_id}`")
 
-        if st.button("Prédire (SegNet)", key="predict_segnet"):
-            st.subheader("Prédiction du masque...")
+        if st.button("Predict (SegNet)", key="predict_segnet"):
+            st.subheader("Predicting mask...")
 
             model = load_segmentation_model()
             transform = A.Compose([A.Resize(256, 256), A.Normalize(), ToTensorV2()])
 
             if img.shape[2] < 4:
-                st.error("L’image ne contient pas les 4 canaux requis.")
+                st.error("The image does not contain the required 4 channels.")
+
             else:
                 image_input = img[:, :, :4].astype(np.float32)
                 transformed = transform(image=image_input)
@@ -452,17 +488,16 @@ with tab2:
                     plot_proportions_vs_truth(
                         proportions,
                         true_props,
-                        "Comparaison Prédite vs Réelle",
+                        "Predicted vs Ground Truth Comparison",
                         CLASSES_NAMES_SEG,
                     )
                 else:
                     plot_proportions(
                         proportions,
-                        "Distribution des classes dans l'image prédite",
+                        "Predicted class distribution in the image",
                         CLASSES_NAMES_SEG,
                     )
 
-                # Affichage du masque
                 # Affichage du masque
                 cmap = ListedColormap(
                     [CLASSES_COLORPALETTE_SEG[cls] for cls in CLASSES_NAMES_SEG]
@@ -496,25 +531,25 @@ with tab2:
                 )
 
                 axs[0].imshow(rgb)
-                axs[0].set_title("Image RGB")
+                axs[0].set_title("RGB Image")
                 axs[0].axis("off")
 
                 axs[1].imshow(
                     pred_mask, cmap=cmap, vmin=0, vmax=len(CLASSES_NAMES_SEG) - 1
                 )
-                axs[1].set_title("Masque prédit")
+                axs[1].set_title("Predicted Mask")
                 axs[1].axis("off")
 
                 if true_mask is not None:
                     axs[2].imshow(
                         true_mask, cmap=cmap, vmin=0, vmax=len(CLASSES_NAMES_SEG) - 1
                     )
-                    axs[2].set_title("Masque réel")
+                    axs[2].set_title("Ground Truth Mask")
                     axs[2].axis("off")
 
                 if comparison_mask is not None:
                     axs[3].imshow(comparison_mask)
-                    axs[3].set_title("Comparaison (vert = OK)")
+                    axs[3].set_title("Comparison (green = OK)")
                     axs[3].axis("off")
 
                 # Légende des classes sur le masque prédit
@@ -542,18 +577,17 @@ with tab2:
                 st.pyplot(legend_fig)
 
     except Exception as e:
-        st.error(f"Erreur lors du traitement de l'image {selected_id}: {e}")
+        st.error(f"Error while processing image {selected_id}: {e}")
 
 
 with tab3:
-    st.header("Modèle 3: Segmentation avec U-Net (fine-tuning)")
+    st.header("Model 3: U-Net Segmentation (fine-tuning)")
 
-    split = st.radio(
-        "Choisissez le jeu de données :", ["test", "validation"], key="split3"
-    )
+    split = st.radio("Choose dataset:", ["test", "validation"], key="split3")
+
     image_ids, img_dir, validation_masks, labels_df = get_data(split)
     selected_id = st.selectbox(
-        "Sélectionnez une image à afficher :", image_ids, key="select_unet"
+        "Select an image to display:", image_ids, key="select_unet"
     )
 
     image_path = os.path.join(img_dir, f"{selected_id}.tif")
@@ -561,16 +595,16 @@ with tab3:
     try:
         img = load_tiff_image(image_path)
         rgb = convert_to_rgb(img)
-        display_rgb_image(rgb, f"Image RGB : `{selected_id}`")
+        display_rgb_image(rgb, f"RGB Image: `{selected_id}`")
 
-        if st.button("Prédire (U-Net)", key="predict_unet"):
-            st.subheader("Prédiction du masque (U-Net)...")
+        if st.button("Predict (U-Net)", key="predict_unet"):
+            st.subheader("Predicting mask (U-Net)...")
 
             model = load_unet_model()
             transform = A.Compose([A.Resize(256, 256), A.Normalize(), ToTensorV2()])
 
             if img.shape[2] < 4:
-                st.error("L’image ne contient pas les 4 canaux requis.")
+                st.error("The image does not contain the required 4 channels.")
             else:
                 image_input = img[:, :, :4].astype(np.float32)
                 transformed = transform(image=image_input)
@@ -583,32 +617,32 @@ with tab3:
                 # Proportions
                 unique, counts = np.unique(pred_mask, return_counts=True)
                 total = pred_mask.size
-                proportions = np.zeros(len(CLASSES_NAMES_SEG))
+                proportions = np.zeros(len(CLASSES_NAMES_UNET))
                 for u, c in zip(unique, counts):
-                    if u < len(CLASSES_NAMES_SEG):
+                    if u < len(CLASSES_NAMES_UNET):
                         proportions[u] = c / total
 
                 if split == "validation" and selected_id in labels_df.index:
                     true_props = np.array(
-                        labels_df.loc[selected_id, CLASSES_NAMES_SEG].tolist(),
+                        labels_df.loc[selected_id, CLASSES_NAMES_UNET].tolist(),
                         dtype=np.float32,
                     ).tolist()
                     plot_proportions_vs_truth(
                         proportions,
                         true_props,
-                        "Comparaison Prédite vs Réelle (U-Net)",
-                        CLASSES_NAMES_SEG,
+                        "Predicted vs Ground Truth Comparison (U-Net)",
+                        CLASSES_COLORPALETTE_SEG,
                     )
                 else:
                     plot_proportions(
                         proportions,
-                        "Distribution des classes dans l'image prédite",
+                        "Predicted class distribution in the image",
                         CLASSES_NAMES_SEG,
                     )
 
                 # Affichage du masque
                 cmap = ListedColormap(
-                    [CLASSES_COLORPALETTE_SEG[cls] for cls in CLASSES_NAMES_SEG]
+                    [CLASSES_COLORPALETTE_SEG[cls] for cls in CLASSES_NAMES_UNET]
                 )
 
                 # Chargement du masque réel si en validation
@@ -639,31 +673,31 @@ with tab3:
                 )
 
                 axs[0].imshow(rgb)
-                axs[0].set_title("Image RGB")
+                axs[0].set_title("RGB Image")
                 axs[0].axis("off")
 
                 axs[1].imshow(
-                    pred_mask, cmap=cmap, vmin=0, vmax=len(CLASSES_NAMES_SEG) - 1
+                    pred_mask, cmap=cmap, vmin=0, vmax=len(CLASSES_NAMES_UNET) - 1
                 )
-                axs[1].set_title("Masque prédit (U-Net)")
+                axs[1].set_title("Predicted Mask (U-Net)")
                 axs[1].axis("off")
 
                 if true_mask is not None:
                     axs[2].imshow(
-                        true_mask, cmap=cmap, vmin=0, vmax=len(CLASSES_NAMES_SEG) - 1
+                        true_mask, cmap=cmap, vmin=0, vmax=len(CLASSES_NAMES_UNET) - 1
                     )
-                    axs[2].set_title("Masque réel")
+                    axs[2].set_title("Ground Truth Mask")
                     axs[2].axis("off")
 
                 if comparison_mask is not None:
                     axs[3].imshow(comparison_mask)
-                    axs[3].set_title("Comparaison (vert = OK)")
+                    axs[3].set_title("Comparison (green = OK)")
                     axs[3].axis("off")
 
                 # Légende des classes
                 handles = [
                     mpatches.Patch(color=CLASSES_COLORPALETTE_SEG[cls], label=cls)
-                    for cls in CLASSES_NAMES_SEG
+                    for cls in CLASSES_NAMES_UNET
                 ]
 
                 st.pyplot(fig_mask)
@@ -672,7 +706,7 @@ with tab3:
 
                 legend_handles = [
                     mpatches.Patch(color=CLASSES_COLORPALETTE_SEG[cls], label=cls)
-                    for cls in CLASSES_NAMES_SEG
+                    for cls in CLASSES_NAMES_UNET
                 ]
                 legend_ax.legend(
                     handles=legend_handles,
@@ -685,4 +719,4 @@ with tab3:
                 st.pyplot(legend_fig)
 
     except Exception as e:
-        st.error(f"Erreur lors du traitement de l'image {selected_id}: {e}")
+        st.error(f"Error while processing image {selected_id}: {e}")
