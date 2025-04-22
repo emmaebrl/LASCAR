@@ -130,7 +130,7 @@ def load_segmentation_model(
 
 
 @st.cache_resource
-def load_unet_model(path="models\model_unet.pth"):
+def load_unet_model(path="models\unet_resnet34_finetuned.pth"):
     model = smp.Unet(
         encoder_name="resnet34",
         encoder_weights="imagenet",
