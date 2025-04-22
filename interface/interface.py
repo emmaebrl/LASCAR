@@ -130,7 +130,7 @@ def load_segmentation_model(
 
 
 @st.cache_resource
-def load_unet_model(path="models\unet_resnet34_finetuned.pth"):
+def load_unet_model(path=r"models\unet_resnet34_finetuned.pth"):
     model = smp.Unet(
         encoder_name="resnet34",
         encoder_weights="imagenet",
@@ -241,10 +241,17 @@ def plot_proportions(proportions: list[float], title: str) -> None:
             xanchor="center",
             font=dict(color="white", size=24),
         ),
-        xaxis_tickangle=-45,
+        xaxis=dict(
+            tickangle=-45,
+            tickfont=dict(color="white"),
+            title_font=dict(color="white")
+        ),
+        yaxis=dict(
+            tickfont=dict(color="white"),
+            title_font=dict(color="white")
+        ),
         margin=dict(l=20, r=20, t=80, b=60),
-        height=400,
-        showlegend=False,
+        height=450,
     )
     st.plotly_chart(fig, use_container_width=True)
 
@@ -256,19 +263,13 @@ def normalize_band(band, low=2, high=98):
 
 
 def plot_proportions_vs_truth(pred: list[float], true: list[float], title: str):
-    # Convert class_names to a list
     class_names_list = list(CLASS_NAMES)
+    df_plot = pd.DataFrame({
+        "Classe": class_names_list * 2,
+        "Proportion": [round(p, 3) for p in pred] + [round(t, 3) for t in true],
+        "Type": ["Prédite"] * len(pred) + ["Réelle"] * len(true),
+    })
 
-    # Create a DataFrame for plotting
-    df_plot = pd.DataFrame(
-        {
-            "Classe": class_names_list * 2,
-            "Proportion": [round(p, 3) for p in pred] + [round(t, 3) for t in true],
-            "Type": ["Prédite"] * len(pred) + ["Réelle"] * len(true),
-        }
-    )
-
-    # Create a grouped bar chart
     fig = px.bar(
         df_plot,
         x="Classe",
@@ -280,7 +281,11 @@ def plot_proportions_vs_truth(pred: list[float], true: list[float], title: str):
         title=title,
     )
 
-    fig.update_traces(texttemplate="%{text:.3f}", textposition="outside")
+    fig.update_traces(
+        texttemplate="%{text:.3f}",
+        textposition="outside",
+        marker_line_width=0
+    )
     fig.update_layout(
         plot_bgcolor="#0E1117",
         paper_bgcolor="#0E1117",
@@ -291,7 +296,15 @@ def plot_proportions_vs_truth(pred: list[float], true: list[float], title: str):
             xanchor="center",
             font=dict(color="white", size=24),
         ),
-        xaxis_tickangle=-45,
+        xaxis=dict(
+            tickangle=-45,
+            tickfont=dict(color="white"),
+            title_font=dict(color="white")
+        ),
+        yaxis=dict(
+            tickfont=dict(color="white"),
+            title_font=dict(color="white")
+        ),
         margin=dict(l=20, r=20, t=80, b=60),
         height=450,
     )
@@ -456,7 +469,7 @@ with tab2:
                     if comparison_mask is not None
                     else 3 if true_mask is not None else 2
                 )
-                fig_mask, axs = plt.subplots(1, n_cols, figsize=(6 * n_cols, 6))
+                fig_mask, axs = plt.subplots(1, n_cols, figsize=(6 * n_cols, 6), dpi=120)
 
                 axs[0].imshow(rgb)
                 axs[0].set_title("Image RGB")
@@ -483,20 +496,158 @@ with tab2:
                     mpatches.Patch(color=CLASSES_COLORPALETTE[cls], label=cls)
                     for cls in CLASS_NAMES
                 ]
-                axs[1].legend(
-                    handles=handles,
-                    bbox_to_anchor=(1.05, 1),
-                    loc="upper left",
-                    fontsize=9,
-                    title="Classes",
-                )
 
                 st.pyplot(fig_mask)
+                legend_fig, legend_ax = plt.subplots(figsize=(12, 1))
+                legend_ax.axis("off")
+
+                legend_handles = [
+                    mpatches.Patch(color=CLASSES_COLORPALETTE[cls], label=cls)
+                    for cls in CLASS_NAMES
+                ]
+                legend_ax.legend(
+                    handles=legend_handles,
+                    loc="center",
+                    ncol=5,
+                    fontsize=10,
+                    frameon=False,
+                )
+
+                st.pyplot(legend_fig)
 
     except Exception as e:
         st.error(f"Erreur lors du traitement de l'image {selected_id}: {e}")
 
 
 with tab3:
-    st.header("Modèle existant (?)")
-    st.info("Fonctionnalité à définir selon le modèle que vous voulez intégrer.")
+    st.header("Modèle 3: Segmentation avec U-Net (fine-tuning)")
+
+    split = st.radio(
+        "Choisissez le jeu de données :", ["test", "validation"], key="split3"
+    )
+    image_ids, img_dir, validation_masks, labels_df = get_data(split)
+    selected_id = st.selectbox(
+        "Sélectionnez une image à afficher :", image_ids, key="select_unet"
+    )
+
+    image_path = os.path.join(img_dir, f"{selected_id}.tif")
+
+    try:
+        img = load_tiff_image(image_path)
+        rgb = convert_to_rgb(img)
+        display_rgb_image(rgb, f"Image RGB : `{selected_id}`")
+
+        if st.button("Prédire (U-Net)", key="predict_unet"):
+            st.subheader("Prédiction du masque (U-Net)...")
+
+            model = load_unet_model()
+            transform = A.Compose([A.Resize(256, 256), A.Normalize(), ToTensorV2()])
+
+            if img.shape[2] < 4:
+                st.error("L’image ne contient pas les 4 canaux requis.")
+            else:
+                image_input = img[:, :, :4].astype(np.float32)
+                transformed = transform(image=image_input)
+                input_tensor = transformed["image"].unsqueeze(0)
+
+                with torch.no_grad():
+                    logits = model(input_tensor)
+                    pred_mask = torch.argmax(logits.squeeze(0), dim=0).cpu().numpy()
+
+                # Proportions
+                unique, counts = np.unique(pred_mask, return_counts=True)
+                total = pred_mask.size
+                proportions = np.zeros(len(CLASS_NAMES))
+                for u, c in zip(unique, counts):
+                    if u < len(CLASS_NAMES):
+                        proportions[u] = c / total
+
+                if split == "validation" and selected_id in labels_df.index:
+                    true_props = np.array(
+                        labels_df.loc[selected_id, CLASS_NAMES].tolist(),
+                        dtype=np.float32,
+                    ).tolist()
+                    plot_proportions_vs_truth(
+                        proportions, true_props, "Comparaison Prédite vs Réelle (U-Net)"
+                    )
+                else:
+                    plot_proportions(
+                        proportions, "Distribution des classes dans l'image prédite"
+                    )
+
+                # Affichage du masque
+                cmap = ListedColormap(
+                    [CLASSES_COLORPALETTE[cls] for cls in CLASS_NAMES]
+                )
+
+                # Chargement du masque réel si en validation
+                true_mask = None
+                if split == "validation":
+                    gt_mask_path = os.path.join(
+                        "dataset", "train", "masks", f"{selected_id}.tif"
+                    )
+                    if os.path.exists(gt_mask_path):
+                        with TiffFile(gt_mask_path) as tif:
+                            true_mask = tif.asarray()
+
+                # Image de comparaison verte/rouge
+                comparison_mask = None
+                if true_mask is not None and pred_mask.shape == true_mask.shape:
+                    comparison_mask = np.zeros((*true_mask.shape, 3), dtype=np.uint8)
+                    comparison_mask[(pred_mask == true_mask)] = [0, 255, 0]  # vert
+                    comparison_mask[(pred_mask != true_mask)] = [255, 0, 0]  # rouge
+
+                # Affichage dynamique : RGB / prédiction / vrai masque / comparaison
+                n_cols = (
+                    4
+                    if comparison_mask is not None
+                    else 3 if true_mask is not None else 2
+                )
+                fig_mask, axs = plt.subplots(1, n_cols, figsize=(6 * n_cols, 6), dpi=120)
+
+                axs[0].imshow(rgb)
+                axs[0].set_title("Image RGB")
+                axs[0].axis("off")
+
+                axs[1].imshow(pred_mask, cmap=cmap, vmin=0, vmax=len(CLASS_NAMES) - 1)
+                axs[1].set_title("Masque prédit (U-Net)")
+                axs[1].axis("off")
+
+                if true_mask is not None:
+                    axs[2].imshow(true_mask, cmap=cmap, vmin=0, vmax=len(CLASS_NAMES) - 1)
+                    axs[2].set_title("Masque réel")
+                    axs[2].axis("off")
+
+                if comparison_mask is not None:
+                    axs[3].imshow(comparison_mask)
+                    axs[3].set_title("Comparaison (vert = OK)")
+                    axs[3].axis("off")
+
+                # Légende des classes
+                handles = [
+                    mpatches.Patch(color=CLASSES_COLORPALETTE[cls], label=cls)
+                    for cls in CLASS_NAMES
+                ]
+
+
+                st.pyplot(fig_mask)
+                legend_fig, legend_ax = plt.subplots(figsize=(12, 1))
+                legend_ax.axis("off")
+
+                legend_handles = [
+                    mpatches.Patch(color=CLASSES_COLORPALETTE[cls], label=cls)
+                    for cls in CLASS_NAMES
+                ]
+                legend_ax.legend(
+                    handles=legend_handles,
+                    loc="center",
+                    ncol=5,
+                    fontsize=10,
+                    frameon=False,
+                )
+
+                st.pyplot(legend_fig)
+
+
+    except Exception as e:
+        st.error(f"Erreur lors du traitement de l'image {selected_id}: {e}")
