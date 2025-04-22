@@ -440,6 +440,19 @@ with tab1:
 with tab2:
     st.header("Model 2: Pixel-wise Segmentation")
 
+    # 💡 Intégration du schéma Draw.io (SVG)
+    with open("graphs/segnet.svg", "r", encoding="utf-8") as f:
+        svg_code = f.read()
+    components.html(
+        f"""
+    <div style="zoom: 0.68; transform: scale(0.68); transform-origin: top left;">
+        {svg_code}
+    </div>
+    """,
+        height=300,
+        scrolling=False,
+    )
+
     split = st.radio("Choose dataset:", ["test", "validation"], key="split2")
 
     image_ids, img_dir, validation_masks, labels_df = get_data(split)
