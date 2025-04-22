@@ -68,9 +68,6 @@ class SegmentationDataset(Dataset):
 train_transform = A.Compose(
     [
         A.Resize(IMG_SIZE, IMG_SIZE),
-        A.HorizontalFlip(p=0.5),
-        A.RandomRotate90(p=0.5),
-        A.RandomBrightnessContrast(p=0.5),
         A.Normalize(),
         ToTensorV2(),
     ]
@@ -85,12 +82,12 @@ val_transform = A.Compose(
 )
 
 # ========== Données ==========
-CSV_PATH = "data/train_labels_GY1QjFw.csv"
-IMG_DIR = "data/train/images"
-MASK_DIR = "data/train/masks"
+CSV_PATH = "dataset/train_labels_GY1QjFw.csv"
+IMG_DIR = "dataset/train/images"
+MASK_DIR = "dataset/train/masks"
 
-TEST_IMG_DIR = r"data\test\images"
-TEST_CSV_PATH = r"data\test_images_kkwOpBC.csv"
+TEST_IMG_DIR = r"dataset\test\images"
+TEST_CSV_PATH = r"dataset\test_images_kkwOpBC.csv"
 
 df = pd.read_csv(CSV_PATH)
 
@@ -103,10 +100,10 @@ val_imgs = [os.path.join(IMG_DIR, f"{sid}.tif") for sid in val_ids]
 train_masks = [os.path.join(MASK_DIR, f"{sid}.tif") for sid in train_ids]
 val_masks = [os.path.join(MASK_DIR, f"{sid}.tif") for sid in val_ids]
 
-train_imgs = train_imgs[:100]  # Limiter à 100 images pour le test
-train_masks = train_masks[:100]  # Limiter à 100 masques pour le test
-val_imgs = val_imgs[:20]  # Limiter à 20 images pour le test
-val_masks = val_masks[:20]  # Limiter à 20 masques pour le test
+train_imgs = train_imgs  # Limiter à 100 images pour le test
+train_masks = train_masks  # Limiter à 100 masques pour le test
+val_imgs = val_imgs  # Limiter à 20 images pour le test
+val_masks = val_masks  # Limiter à 20 masques pour le test
 
 train_ds = SegmentationDataset(train_imgs, train_masks, transform=train_transform)
 val_ds = SegmentationDataset(val_imgs, val_masks, transform=val_transform)
@@ -253,5 +250,5 @@ preds = preds / preds.sum(axis=1, keepdims=True)  # Juste au cas où
 # Sauvegarde
 df_sub = pd.DataFrame(preds, columns=CLASSES)
 df_sub.insert(0, "sample_id", sample_ids)
-df_sub.to_csv("submission_segmentation.csv", index=False)
+df_sub.to_csv("submission_segmentation_unet.csv", index=False)
 print("✅ Sauvegarde dans submission_segmentation.csv terminée.")
