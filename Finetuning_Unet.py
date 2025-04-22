@@ -100,10 +100,6 @@ val_imgs = [os.path.join(IMG_DIR, f"{sid}.tif") for sid in val_ids]
 train_masks = [os.path.join(MASK_DIR, f"{sid}.tif") for sid in train_ids]
 val_masks = [os.path.join(MASK_DIR, f"{sid}.tif") for sid in val_ids]
 
-train_imgs = train_imgs  # Limiter à 100 images pour le test
-train_masks = train_masks  # Limiter à 100 masques pour le test
-val_imgs = val_imgs  # Limiter à 20 images pour le test
-val_masks = val_masks  # Limiter à 20 masques pour le test
 
 train_ds = SegmentationDataset(train_imgs, train_masks, transform=train_transform)
 val_ds = SegmentationDataset(val_imgs, val_masks, transform=val_transform)

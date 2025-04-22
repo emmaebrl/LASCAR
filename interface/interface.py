@@ -84,20 +84,33 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-CLASSES_COLORPALETTE = {
+
+CLASSES_COLORPALETTE_SEG = {
     "no_data": "#ffffff",
     "clouds": "#cccccc",
-    "cultivated": "#e41a1c",
-    "herbaceous": "#377eb8",
+    "artificial": "#e41a1c",
+    "cultivated": "#377eb8",
     "broadleaf": "#4daf4a",
     "coniferous": "#984ea3",
-    "artificial": "#ff7f00",
-    "water": "#a65628",
-    "natural": "#f781bf",
-    "snow": "#999999",
+    "herbaceous": "#ff7f00",
+    "natural": "#a65628",
+    "snow": "#f781bf",
+    "water": "#999999",
 }
 
-CLASS_NAMES = CLASSES_COLORPALETTE.keys()
+CLASS_NAMES_SEG = CLASSES_COLORPALETTE_SEG.keys()
+CLASSES_NAMES_PROP = [
+    "no_data",
+    "clouds",
+    "cultivated",
+    "herbaceous",
+    "broadleaf",
+    "coniferous",
+    "artificial",
+    "water",
+    "natural",
+    "snow",
+]
 
 tab1, tab2, tab3 = st.tabs(
     [
@@ -216,7 +229,7 @@ def display_rgb_image(rgb: np.ndarray, title: str = "Image RGB"):
 def plot_proportions(proportions: list[float], title: str) -> None:
     df_plot = pd.DataFrame(
         {
-            "Classe": [name.capitalize() for name in CLASS_NAMES],
+            "Classe": [name.capitalize() for name in CLASSES_NAMES_PROP],
             "Proportion": [round(p, 3) for p in proportions],
         }
     )
@@ -242,14 +255,9 @@ def plot_proportions(proportions: list[float], title: str) -> None:
             font=dict(color="white", size=24),
         ),
         xaxis=dict(
-            tickangle=-45,
-            tickfont=dict(color="white"),
-            title_font=dict(color="white")
+            tickangle=-45, tickfont=dict(color="white"), title_font=dict(color="white")
         ),
-        yaxis=dict(
-            tickfont=dict(color="white"),
-            title_font=dict(color="white")
-        ),
+        yaxis=dict(tickfont=dict(color="white"), title_font=dict(color="white")),
         margin=dict(l=20, r=20, t=80, b=60),
         height=450,
     )
@@ -263,12 +271,14 @@ def normalize_band(band, low=2, high=98):
 
 
 def plot_proportions_vs_truth(pred: list[float], true: list[float], title: str):
-    class_names_list = list(CLASS_NAMES)
-    df_plot = pd.DataFrame({
-        "Classe": class_names_list * 2,
-        "Proportion": [round(p, 3) for p in pred] + [round(t, 3) for t in true],
-        "Type": ["Prédite"] * len(pred) + ["Réelle"] * len(true),
-    })
+    class_names_list = list(CLASSES_NAMES_PROP)
+    df_plot = pd.DataFrame(
+        {
+            "Classe": class_names_list * 2,
+            "Proportion": [round(p, 3) for p in pred] + [round(t, 3) for t in true],
+            "Type": ["Prédite"] * len(pred) + ["Réelle"] * len(true),
+        }
+    )
 
     fig = px.bar(
         df_plot,
@@ -282,9 +292,7 @@ def plot_proportions_vs_truth(pred: list[float], true: list[float], title: str):
     )
 
     fig.update_traces(
-        texttemplate="%{text:.3f}",
-        textposition="outside",
-        marker_line_width=0
+        texttemplate="%{text:.3f}", textposition="outside", marker_line_width=0
     )
     fig.update_layout(
         plot_bgcolor="#0E1117",
@@ -297,14 +305,9 @@ def plot_proportions_vs_truth(pred: list[float], true: list[float], title: str):
             font=dict(color="white", size=24),
         ),
         xaxis=dict(
-            tickangle=-45,
-            tickfont=dict(color="white"),
-            title_font=dict(color="white")
+            tickangle=-45, tickfont=dict(color="white"), title_font=dict(color="white")
         ),
-        yaxis=dict(
-            tickfont=dict(color="white"),
-            title_font=dict(color="white")
-        ),
+        yaxis=dict(tickfont=dict(color="white"), title_font=dict(color="white")),
         margin=dict(l=20, r=20, t=80, b=60),
         height=450,
     )
@@ -362,7 +365,7 @@ with tab1:
 
                 if split == "validation":
                     true_props = np.array(
-                        labels_df.loc[selected_id, CLASS_NAMES].tolist(),
+                        labels_df.loc[selected_id, CLASSES_NAMES_PROP].tolist(),
                         dtype=np.float32,
                     )
 
@@ -422,14 +425,14 @@ with tab2:
                 # Proportions
                 unique, counts = np.unique(pred_mask, return_counts=True)
                 total = pred_mask.size
-                proportions = np.zeros(len(CLASS_NAMES))
+                proportions = np.zeros(len(CLASS_NAMES_SEG))
                 for u, c in zip(unique, counts):
-                    if u < len(CLASS_NAMES):
+                    if u < len(CLASS_NAMES_SEG):
                         proportions[u] = c / total
 
                 if split == "validation" and selected_id in labels_df.index:
                     true_props = np.array(
-                        labels_df.loc[selected_id, CLASS_NAMES].tolist(),
+                        labels_df.loc[selected_id, CLASS_NAMES_SEG].tolist(),
                         dtype=np.float32,
                     ).tolist()
                     plot_proportions_vs_truth(
@@ -443,7 +446,7 @@ with tab2:
                 # Affichage du masque
                 # Affichage du masque
                 cmap = ListedColormap(
-                    [CLASSES_COLORPALETTE[cls] for cls in CLASS_NAMES]
+                    [CLASSES_COLORPALETTE_SEG[cls] for cls in CLASS_NAMES_SEG]
                 )
 
                 # Chargement du masque réel si en validation
@@ -469,19 +472,23 @@ with tab2:
                     if comparison_mask is not None
                     else 3 if true_mask is not None else 2
                 )
-                fig_mask, axs = plt.subplots(1, n_cols, figsize=(6 * n_cols, 6), dpi=120)
+                fig_mask, axs = plt.subplots(
+                    1, n_cols, figsize=(6 * n_cols, 6), dpi=120
+                )
 
                 axs[0].imshow(rgb)
                 axs[0].set_title("Image RGB")
                 axs[0].axis("off")
 
-                axs[1].imshow(pred_mask, cmap=cmap, vmin=0, vmax=len(CLASS_NAMES) - 1)
+                axs[1].imshow(
+                    pred_mask, cmap=cmap, vmin=0, vmax=len(CLASS_NAMES_SEG) - 1
+                )
                 axs[1].set_title("Masque prédit")
                 axs[1].axis("off")
 
                 if true_mask is not None:
                     axs[2].imshow(
-                        true_mask, cmap=cmap, vmin=0, vmax=len(CLASS_NAMES) - 1
+                        true_mask, cmap=cmap, vmin=0, vmax=len(CLASS_NAMES_SEG) - 1
                     )
                     axs[2].set_title("Masque réel")
                     axs[2].axis("off")
@@ -493,8 +500,8 @@ with tab2:
 
                 # Légende des classes sur le masque prédit
                 handles = [
-                    mpatches.Patch(color=CLASSES_COLORPALETTE[cls], label=cls)
-                    for cls in CLASS_NAMES
+                    mpatches.Patch(color=CLASSES_COLORPALETTE_SEG[cls], label=cls)
+                    for cls in CLASS_NAMES_SEG
                 ]
 
                 st.pyplot(fig_mask)
@@ -502,8 +509,8 @@ with tab2:
                 legend_ax.axis("off")
 
                 legend_handles = [
-                    mpatches.Patch(color=CLASSES_COLORPALETTE[cls], label=cls)
-                    for cls in CLASS_NAMES
+                    mpatches.Patch(color=CLASSES_COLORPALETTE_SEG[cls], label=cls)
+                    for cls in CLASS_NAMES_SEG
                 ]
                 legend_ax.legend(
                     handles=legend_handles,
@@ -557,14 +564,14 @@ with tab3:
                 # Proportions
                 unique, counts = np.unique(pred_mask, return_counts=True)
                 total = pred_mask.size
-                proportions = np.zeros(len(CLASS_NAMES))
+                proportions = np.zeros(len(CLASS_NAMES_SEG))
                 for u, c in zip(unique, counts):
-                    if u < len(CLASS_NAMES):
+                    if u < len(CLASS_NAMES_SEG):
                         proportions[u] = c / total
 
                 if split == "validation" and selected_id in labels_df.index:
                     true_props = np.array(
-                        labels_df.loc[selected_id, CLASS_NAMES].tolist(),
+                        labels_df.loc[selected_id, CLASS_NAMES_SEG].tolist(),
                         dtype=np.float32,
                     ).tolist()
                     plot_proportions_vs_truth(
@@ -577,7 +584,7 @@ with tab3:
 
                 # Affichage du masque
                 cmap = ListedColormap(
-                    [CLASSES_COLORPALETTE[cls] for cls in CLASS_NAMES]
+                    [CLASSES_COLORPALETTE_SEG[cls] for cls in CLASS_NAMES_SEG]
                 )
 
                 # Chargement du masque réel si en validation
@@ -603,18 +610,24 @@ with tab3:
                     if comparison_mask is not None
                     else 3 if true_mask is not None else 2
                 )
-                fig_mask, axs = plt.subplots(1, n_cols, figsize=(6 * n_cols, 6), dpi=120)
+                fig_mask, axs = plt.subplots(
+                    1, n_cols, figsize=(6 * n_cols, 6), dpi=120
+                )
 
                 axs[0].imshow(rgb)
                 axs[0].set_title("Image RGB")
                 axs[0].axis("off")
 
-                axs[1].imshow(pred_mask, cmap=cmap, vmin=0, vmax=len(CLASS_NAMES) - 1)
+                axs[1].imshow(
+                    pred_mask, cmap=cmap, vmin=0, vmax=len(CLASS_NAMES_SEG) - 1
+                )
                 axs[1].set_title("Masque prédit (U-Net)")
                 axs[1].axis("off")
 
                 if true_mask is not None:
-                    axs[2].imshow(true_mask, cmap=cmap, vmin=0, vmax=len(CLASS_NAMES) - 1)
+                    axs[2].imshow(
+                        true_mask, cmap=cmap, vmin=0, vmax=len(CLASS_NAMES_SEG) - 1
+                    )
                     axs[2].set_title("Masque réel")
                     axs[2].axis("off")
 
@@ -625,18 +638,17 @@ with tab3:
 
                 # Légende des classes
                 handles = [
-                    mpatches.Patch(color=CLASSES_COLORPALETTE[cls], label=cls)
-                    for cls in CLASS_NAMES
+                    mpatches.Patch(color=CLASSES_COLORPALETTE_SEG[cls], label=cls)
+                    for cls in CLASS_NAMES_SEG
                 ]
-
 
                 st.pyplot(fig_mask)
                 legend_fig, legend_ax = plt.subplots(figsize=(12, 1))
                 legend_ax.axis("off")
 
                 legend_handles = [
-                    mpatches.Patch(color=CLASSES_COLORPALETTE[cls], label=cls)
-                    for cls in CLASS_NAMES
+                    mpatches.Patch(color=CLASSES_COLORPALETTE_SEG[cls], label=cls)
+                    for cls in CLASS_NAMES_SEG
                 ]
                 legend_ax.legend(
                     handles=legend_handles,
@@ -647,7 +659,6 @@ with tab3:
                 )
 
                 st.pyplot(legend_fig)
-
 
     except Exception as e:
         st.error(f"Erreur lors du traitement de l'image {selected_id}: {e}")
