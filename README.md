@@ -1,74 +1,77 @@
 # 🛰️ LASCAR – Land cover Analysis with Satellite Classification and Automated Recognition
 
-**LASCAR** est un projet de classification de couverture terrestre à partir d'images satellites Sentinel-2, dans le cadre du challenge Preligens. Il vise à prédire la distribution des classes de terrain pour une image donnée, à l’aide de modèles d’apprentissage profond.
+**LASCAR** is a land cover classification project using Sentinel-2 satellite images, developed as part of the Preligens challenge. Its goal is to predict the distribution of land cover classes for a given image using deep learning models.
 
-## 🌍 Objectif du projet
-Développer un système de prédiction robuste de la distribution des types de couverture terrestre dans des images satellitaires, à partir d’une segmentation sémantique ou directement par régression.
+## 🌍 Project Objective
+To develop a robust prediction system for estimating the distribution of land cover types in satellite imagery, either through semantic segmentation or directly via regression.
 
 ---
 
-## 🧠 Modèles développés
+## 🧠 Developed Models
 
-### 1. **SimpleCNN (Régression des proportions)**
-- 📌 Objectif : Prédire directement le vecteur de distribution des classes de couverture terrestre pour une image donnée.
-- 🛠️ Méthode :
-  - Architecture CNN compacte avec 3 blocs convolutionnels suivis d'un **Average Pooling global**.
-  - Couche fully-connected finale produisant un vecteur log-softmax.
-  - Fonction de perte : **KL-Divergence (batchmean)**.
-
+### 1. **SimpleCNN (Class Proportion Regression)**
+- 📌 Goal: Directly predict the land cover class distribution vector for a given image.
+- 🛠️ Method:
+  - Compact CNN architecture with 3 convolutional blocks followed by **Global Average Pooling**.
+  - Final fully-connected layer outputs a log-softmax vector.
+  - Loss function: **KL-Divergence (batchmean)**.
 
 <p align="center">
   <img src="graphs/simplecnn.svg" width="400"/>
 </p>
 
-### 2. **SimpleSegNet (Segmentation des classes)**
-- 📌 Objectif : Prédire un **masque de segmentation multi-classes** pour chaque image, et en dériver la proportion de chaque classe.
-- 🛠️ Méthode :
-  - Architecture de type **encoder-decoder** :
-    - Encoder : empilement de convolutions avec **BatchNorm**, ReLU, et **MaxPool** (réduction de résolution).
-    - Decoder : empilement de **ConvTranspose2D** (upsampling) et convolutions classiques.
-  - Fonction de perte : **CrossEntropyLoss**.
+### 2. **SimpleSegNet (Class Segmentation)**
+- 📌 Goal: Predict a **multi-class segmentation mask** for each image and derive class proportions from it.
+- 🛠️ Method:
+  - **Encoder-decoder** style architecture:
+    - Encoder: stacked convolutions with **BatchNorm**, ReLU, and **MaxPool** for downsampling.
+    - Decoder: stacked **ConvTranspose2D** (upsampling) and standard convolutions.
+  - Loss function: **CrossEntropyLoss**.
 
 <p align="center">
   <img src="graphs/segnet.svg" width="400"/>
 </p>
 
-### 3. **U-Net ResNet34 (Segmentation avec pré-entraînement)**
-- 📌 Objectif : Prédire les **masques de segmentation multi-classes**, puis en extraire les **proportions de classes** pour chaque image.
-- 🛠️ Méthode :
-  - Utilisation du package `segmentation_models_pytorch` (SMP).
-  - Architecture **U-Net** avec encoder **ResNet34 pré-entraîné sur ImageNet**.
-  - Entrées : images satellites en 4 canaux (R, G, B, NIR).
-  - Fonction de perte : `CrossEntropyLoss`.
+### 3. **U-Net ResNet34 (Pretrained Segmentation)**
+- 📌 Goal: Predict **multi-class segmentation masks**, then extract **class proportions** for each image.
+- 🛠️ Method:
+  - Uses the `segmentation_models_pytorch` (SMP) package.
+  - **U-Net** architecture with a **ResNet34 encoder pretrained on ImageNet**.
+  - Inputs: 4-channel satellite images (R, G, B, NIR).
+  - Loss function: `CrossEntropyLoss`.
 
-## 🚀 Lancer le projet
+## 🚀 Running the Project
 
 ### 1. Installation
 
 ```bash
 git clone https://github.com/emmaebrl/LASCAR.git
 python -m venv venv
-source venv/bin/activate  # ou .\venv\Scripts\activate sous Windows
+source venv/bin/activate  # or .\venv\Scripts\activate on Windows
 pip install -r requirements.txt
 ```
-### 2. Entrainer les modèles
-Pour les modèles 1 et 2, utiliser le notebook ``Models.ipynb``.
-Pour fine-tuner un modèle U-net, utiliser le script pytjon ``Finetuning_Unet.py``.
+### 2. Training the Models
+For models 1 and 2, use the `Models.ipynb` notebook.
+To fine-tune the U-Net model, use the ``Finetuning_Unet.py`` script.
 
-### 3. Tester les modèles dans notre application Streamlit
-Nous proposons une interface interactive pour tester les modèles. Pour la découvrir, lancer depuis la source du projet:
+### 3. Test the Models in our Streamlit App
+We provide an interactive interface to test the models. To launch it from the project root:
 ```bash
 streamlit run interface/interface.py 
 ```
 
-### Fonctionnalités :
+### Features :
 - Trois modèles disponibles :
-  - SimpleCNN (proportions)
-  - SimpleSegNet (segmentation)
-  - U-Net ResNet34 (segmentation fine)
-- Exemple de prédiction pour le jeu de test
-- Comparaison prédictions / vraie valeurs sur le jeu de validation
+    - SimpleCNN (proportion regression)
 
-### ✍️ Contributeurs
+    - SimpleSegNet (segmentation)
+
+    - U-Net ResNet34 (fine segmentation)
+
+-Example predictions on the test set
+
+-Compare predictions vs. ground truth on the validation set
+
+### ✍️ Contributors
 - **[Emma Eberle](https://github.com/emmaebrl)**
 - **[Alexis Christien](https://github.com/AlexChrst)**
