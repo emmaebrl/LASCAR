@@ -23,21 +23,21 @@ EPOCHS = 5
 NUM_CLASSES = 10  # Seulement classes valides (sans clouds et no_data)
 
 CLASSES = [
-    "cultivated",
-    "herbaceous",
-    "broadleaf",
-    "coniferous",
-    "artificial",
-    "water",
-    "natural",
-    "snow",
     "no_data",
     "clouds",
+    "artificial",
+    "cultivated",
+    "broadleaf",
+    "coniferous",
+    "herbaceous",
+    "natural",
+    "snow",
+    "water",
 ]
-
 
 # ========== Utils ==========
 def load_tif(path):
+    
     with rasterio.open(path) as src:
         arr = src.read()
         return np.transpose(arr, (1, 2, 0))  # (H, W, C)

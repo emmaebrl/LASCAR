@@ -630,14 +630,14 @@ with tab3:
                 # Proportions
                 unique, counts = np.unique(pred_mask, return_counts=True)
                 total = pred_mask.size
-                proportions = np.zeros(len(CLASSES_NAMES_UNET))
+                proportions = np.zeros(len(CLASSES_NAMES_SEG))
                 for u, c in zip(unique, counts):
-                    if u < len(CLASSES_NAMES_UNET):
+                    if u < len(CLASSES_NAMES_SEG):
                         proportions[u] = c / total
 
                 if split == "validation" and selected_id in labels_df.index:
                     true_props = np.array(
-                        labels_df.loc[selected_id, CLASSES_NAMES_UNET].tolist(),
+                        labels_df.loc[selected_id, CLASSES_NAMES_SEG].tolist(),
                         dtype=np.float32,
                     ).tolist()
                     plot_proportions_vs_truth(
@@ -655,7 +655,7 @@ with tab3:
 
                 # Affichage du masque
                 cmap = ListedColormap(
-                    [CLASSES_COLORPALETTE_SEG[cls] for cls in CLASSES_NAMES_UNET]
+                    [CLASSES_COLORPALETTE_SEG[cls] for cls in CLASSES_NAMES_SEG]
                 )
 
                 # Chargement du masque réel si en validation
@@ -690,14 +690,14 @@ with tab3:
                 axs[0].axis("off")
 
                 axs[1].imshow(
-                    pred_mask, cmap=cmap, vmin=0, vmax=len(CLASSES_NAMES_UNET) - 1
+                    pred_mask, cmap=cmap, vmin=0, vmax=len(CLASSES_NAMES_SEG) - 1
                 )
                 axs[1].set_title("Predicted Mask (U-Net)")
                 axs[1].axis("off")
 
                 if true_mask is not None:
                     axs[2].imshow(
-                        true_mask, cmap=cmap, vmin=0, vmax=len(CLASSES_NAMES_UNET) - 1
+                        true_mask, cmap=cmap, vmin=0, vmax=len(CLASSES_NAMES_SEG) - 1
                     )
                     axs[2].set_title("Ground Truth Mask")
                     axs[2].axis("off")
@@ -710,7 +710,7 @@ with tab3:
                 # Légende des classes
                 handles = [
                     mpatches.Patch(color=CLASSES_COLORPALETTE_SEG[cls], label=cls)
-                    for cls in CLASSES_NAMES_UNET
+                    for cls in CLASSES_NAMES_SEG
                 ]
 
                 st.pyplot(fig_mask)
@@ -719,7 +719,7 @@ with tab3:
 
                 legend_handles = [
                     mpatches.Patch(color=CLASSES_COLORPALETTE_SEG[cls], label=cls)
-                    for cls in CLASSES_NAMES_UNET
+                    for cls in CLASSES_NAMES_SEG
                 ]
                 legend_ax.legend(
                     handles=legend_handles,
