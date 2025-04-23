@@ -17,7 +17,7 @@ To develop a robust prediction system for estimating the distribution of land co
   - Loss function: **KL-Divergence (batchmean)**.
 
 <p align="center">
-  <img src="graphs/simplecnn.svg" width="400"/>
+  <img src="graphs/simplecnn.svg" width="500"/>
 </p>
 
 ### 2. **SimpleSegNet (Class Segmentation)**
@@ -29,7 +29,7 @@ To develop a robust prediction system for estimating the distribution of land co
   - Loss function: **CrossEntropyLoss**.
 
 <p align="center">
-  <img src="graphs/segnet.svg" width="400"/>
+  <img src="graphs/segnet.svg" width="500"/>
 </p>
 
 ### 3. **U-Net ResNet34 (Pretrained Segmentation)**
