@@ -174,3 +174,4 @@ cython_debug/
 
 dataset/
 models/unet*
+submission/

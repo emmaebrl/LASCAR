@@ -35,9 +35,10 @@ CLASSES = [
     "water",
 ]
 
+
 # ========== Utils ==========
 def load_tif(path):
-    
+
     with rasterio.open(path) as src:
         arr = src.read()
         return np.transpose(arr, (1, 2, 0))  # (H, W, C)
