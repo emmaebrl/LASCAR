@@ -117,13 +117,13 @@ CLASSES_COLORPALETTE_SEG = {
     "no_data": "#ffffff",
     "clouds": "#cccccc",
     "artificial": "#e41a1c",
-    "cultivated": "#377eb8",
-    "broadleaf": "#4daf4a",
-    "coniferous": "#984ea3",
-    "herbaceous": "#ff7f00",
-    "natural": "#a65628",
+    "cultivated": "#7e5835",
+    "broadleaf": "#062b16",
+    "coniferous": "#94812b",
+    "herbaceous": "#c7d778",
+    "natural": "#75da7e",
     "snow": "#f781bf",
-    "water": "#999999",
+    "water": "#377eb8",
 }
 
 CLASSES_NAMES_SEG = CLASSES_COLORPALETTE_SEG.keys()
@@ -302,10 +302,7 @@ def plot_proportions(
             tickangle=-45, tickfont=dict(color="white"), title_font=dict(color="white")
         ),
         yaxis=dict(tickfont=dict(color="white"), title_font=dict(color="white")),
-        legend=dict(
-        font=dict(color="white"),
-        title_font=dict(color="white")
-    ),
+        legend=dict(font=dict(color="white"), title_font=dict(color="white")),
         margin=dict(l=20, r=20, t=80, b=60),
         height=450,
     )
@@ -358,10 +355,7 @@ def plot_proportions_vs_truth(
             tickangle=-45, tickfont=dict(color="white"), title_font=dict(color="white")
         ),
         yaxis=dict(tickfont=dict(color="white"), title_font=dict(color="white")),
-        legend=dict(
-        font=dict(color="white"),
-        title_font=dict(color="white")
-    ),
+        legend=dict(font=dict(color="white"), title_font=dict(color="white")),
         margin=dict(l=20, r=20, t=80, b=60),
         height=450,
     )
@@ -571,6 +565,21 @@ with tab2:
                 if comparison_mask is not None:
                     axs[3].imshow(comparison_mask)
                     axs[3].set_title("Comparison (green = OK)")
+                    # add % of correctly predicted pixels
+                    correct_pixels = np.sum(pred_mask == true_mask)
+                    total_pixels = pred_mask.size
+                    accuracy = correct_pixels / total_pixels * 100
+                    axs[3].text(
+                        0.5,
+                        0.05,
+                        f"Accuracy: {accuracy:.2f}%",
+                        fontsize=16,
+                        color="white",
+                        ha="center",
+                        va="bottom",
+                        transform=axs[3].transAxes,
+                        bbox=dict(facecolor="black", alpha=0.7, edgecolor="none"),
+                    )
                     axs[3].axis("off")
 
                 # Légende des classes sur le masque prédit
@@ -604,8 +613,11 @@ with tab2:
 with tab3:
     st.header("Model 3: U-Net Segmentation (fine-tuning)")
 
-    st.image("graphs/unet_architecture.jpg", caption="U-Net Architecture", use_container_width =True)
-
+    st.image(
+        "graphs/unet_architecture.jpg",
+        caption="U-Net Architecture",
+        use_container_width=True,
+    )
 
     split = st.radio("Choose dataset:", ["test", "validation"], key="split3")
 
@@ -716,6 +728,21 @@ with tab3:
                 if comparison_mask is not None:
                     axs[3].imshow(comparison_mask)
                     axs[3].set_title("Comparison (green = OK)")
+                    # add % of correctly predicted pixels
+                    correct_pixels = np.sum(pred_mask == true_mask)
+                    total_pixels = pred_mask.size
+                    accuracy = correct_pixels / total_pixels * 100
+                    axs[3].text(
+                        0.5,
+                        0.5,
+                        f"Accuracy: {accuracy:.2f}%",
+                        fontsize=16,
+                        color="white",
+                        ha="center",
+                        va="bottom",
+                        transform=axs[3].transAxes,
+                        bbox=dict(facecolor="black", alpha=0.7, edgecolor="none"),
+                    )
                     axs[3].axis("off")
 
                 # Légende des classes
